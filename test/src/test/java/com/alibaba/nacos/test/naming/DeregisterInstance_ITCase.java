@@ -15,20 +15,23 @@
  */
 package com.alibaba.nacos.test.naming;
 
+import com.alibaba.nacos.Nacos;
+import com.alibaba.nacos.api.PropertyKeyConst;
 import com.alibaba.nacos.api.naming.NamingFactory;
 import com.alibaba.nacos.api.naming.NamingService;
 import com.alibaba.nacos.api.naming.pojo.Instance;
-import com.alibaba.nacos.naming.NamingApp;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static com.alibaba.nacos.test.naming.NamingBase.TEST_PORT;
@@ -41,22 +44,28 @@ import static com.alibaba.nacos.test.naming.NamingBase.randomDomainName;
  * @date 2018/6/20
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = NamingApp.class, properties = {"server.servlet.context-path=/nacos"},
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = Nacos.class, properties = {"server.servlet.context-path=/nacos"},
+        webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 public class DeregisterInstance_ITCase {
 
     private NamingService naming;
     @LocalServerPort
     private int port;
-
+    
+    @Value("${server.servlet.context-path}")
+    private String contextPath;
+    
     @Before
     public void init() throws Exception {
-
-        NamingBase.prepareServer(port);
+    
+        NamingBase.prepareServer(port, contextPath);
 
         if (naming == null) {
+            Properties properties = new Properties();
+            properties.setProperty(PropertyKeyConst.SERVER_ADDR, "127.0.0.1" + ":" + port);
+            properties.put(PropertyKeyConst.CONTEXT_PATH, contextPath);
             //TimeUnit.SECONDS.sleep(10);
-            naming = NamingFactory.createNamingService("127.0.0.1" + ":" + port);
+            naming = NamingFactory.createNamingService(properties);
         }
 
         while (true) {
@@ -78,13 +87,12 @@ public class DeregisterInstance_ITCase {
         String serviceName = randomDomainName();
         System.out.println(serviceName);
         naming.registerInstance(serviceName, "127.0.0.1", TEST_PORT);
-        naming.registerInstance(serviceName, "127.0.0.2", TEST_PORT);
 
         List<Instance> instances = naming.getAllInstances(serviceName);
-        verifyInstanceList(instances, 2, serviceName);
+        verifyInstanceList(instances, 1, serviceName);
 
         instances = naming.getAllInstances(serviceName);
-        Assert.assertEquals(2, instances.size());
+        Assert.assertEquals(1, instances.size());
 
         naming.deregisterInstance(serviceName, "127.0.0.1", TEST_PORT);
 
@@ -92,15 +100,7 @@ public class DeregisterInstance_ITCase {
 
         instances = naming.getAllInstances(serviceName);
 
-        Assert.assertEquals(instances.size(), 1);
-        Assert.assertEquals(instances.get(0).getIp(), "127.0.0.2");
-
-        naming.deregisterInstance(serviceName, "127.0.0.2", TEST_PORT);
-
-        TimeUnit.SECONDS.sleep(3);
-
-        instances = naming.getAllInstances(serviceName);
-        Assert.assertEquals(0, instances.size());
+        Assert.assertEquals(instances.size(), 0);
     }
 
     /**
@@ -115,14 +115,13 @@ public class DeregisterInstance_ITCase {
         System.out.println(serviceName);
 
         naming.registerInstance(serviceName, "127.0.0.1", TEST_PORT, "c1");
-        naming.registerInstance(serviceName, "127.0.0.2", TEST_PORT, "c2");
 
         List<Instance> instances;
         instances = naming.getAllInstances(serviceName);
-        verifyInstanceList(instances, 2, serviceName);
+        verifyInstanceList(instances, 1, serviceName);
 
         instances = naming.getAllInstances(serviceName);
-        Assert.assertEquals(instances.size(), 2);
+        Assert.assertEquals(1, instances.size());
 
         naming.deregisterInstance(serviceName, "127.0.0.1", TEST_PORT, "c1");
 
@@ -130,12 +129,7 @@ public class DeregisterInstance_ITCase {
 
         instances = naming.getAllInstances(serviceName);
 
-        Assert.assertEquals(1, instances.size());
-
-        instances = naming.getAllInstances(serviceName, Arrays.asList("c2"));
-        Assert.assertEquals(instances.size(), 1);
-
-        instances = naming.getAllInstances(serviceName, Arrays.asList("c1"));
+        Assert.assertEquals(0, instances.size());
     }
 
 
@@ -152,14 +146,12 @@ public class DeregisterInstance_ITCase {
         String serviceName = randomDomainName();
 
         naming.registerInstance(serviceName, "127.0.0.1", TEST_PORT, "c1");
-        naming.registerInstance(serviceName, "127.0.0.2", TEST_PORT, "c2");
 
         List<Instance> instances;
         instances = naming.getAllInstances(serviceName);
-        verifyInstanceList(instances, 2, serviceName);
+        verifyInstanceList(instances, 1, serviceName);
 
-        instances = naming.getAllInstances(serviceName);
-        Assert.assertEquals(2, instances.size());
+        Assert.assertEquals(1, instances.size());
 
         naming.deregisterInstance(serviceName, "127.0.0.1", TEST_PORT, "c1");
 
@@ -167,14 +159,6 @@ public class DeregisterInstance_ITCase {
 
         instances = naming.getAllInstances(serviceName);
 
-        Assert.assertEquals(1, instances.size());
-
-        instances = naming.getAllInstances(serviceName, Arrays.asList("c2"));
-        Assert.assertEquals(1, instances.size());
-
-        naming.deregisterInstance(serviceName,"127.0.0.2", TEST_PORT, "c2");
-        TimeUnit.SECONDS.sleep(5);
-        instances = naming.getAllInstances(serviceName);
         Assert.assertEquals(0, instances.size());
     }
 
